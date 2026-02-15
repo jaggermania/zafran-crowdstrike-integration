@@ -18,6 +18,8 @@ enum IdentifierType {
   SERIAL_NUMBER = 7;
   TENABLE_UUID = 8;
   CROWDSTRIKE_AID = 9;
+  REPO_NAME = 10;
+  ILLUMIO_AGENT_UUID = 11;
 }
 
 enum InstancePropertyType {
@@ -80,6 +82,8 @@ message InetEvidence {
   google.protobuf.Timestamp first_seen = 1;
   google.protobuf.Timestamp last_seen = 2;
   string evidence_string = 3;
+  string source = 4;         // Optional: defaults to "third_party" if empty
+  string evidence_type = 5;  // Optional: defaults to "third_party_evidence" if empty
 }
 
 message InstanceTagKeyValue {
