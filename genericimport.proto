@@ -170,6 +170,7 @@ message Vulnerability {
   string severity = 16; // Severity level (e.g., "critical", "high", "medium", "low")
 }
 
+// Control type enum - matches db interfaces ControlType
 enum ControlType {
   CONTROL_TYPE_UNSPECIFIED = 0;
   CONTROL_TYPE_EDR = 1;
@@ -200,6 +201,7 @@ enum FeatureAction {
 
 // Control data for collection and linking to instances
 // Controls are upserted based on (tenant_id, integration_id, control_id) - the actual DB control name
+// is constructed as "{integration_id}_{control_id}" to ensure uniqueness per tenant.
 message ControlData {
   string control_id = 1;        // Unique control identifier within this integration (required)
   ControlType type = 2;         // Control type enum
@@ -221,4 +223,30 @@ message ControlFeatureConfigData {
   optional bool enabled = 1;    // For boolean type features
   FeatureAction action = 2;     // For action-based features
   string params = 3;            // Additional JSON params (max 64KB enforced)
+}
+
+// Network entity type for forwarding rules
+enum NetworkEntityType {
+  NETWORK_ENTITY_TYPE_UNSPECIFIED = 0;
+  NETWORK_ENTITY_TYPE_IP = 1;
+  NETWORK_ENTITY_TYPE_RANGE = 2;
+  NETWORK_ENTITY_TYPE_DOMAIN = 3;
+}
+
+// Network entity represents a source or destination in a forwarding rule
+message NetworkEntity {
+  string entity = 1;            // The entity value (IP address, IP range, or domain)
+  NetworkEntityType type = 2;   // Type of the entity
+}
+
+// Forwarding rule data for network forwarding/NAT rules
+// These rules describe how traffic is forwarded between network entities.
+// The rule_type will be automatically prefixed with "custom_" and the integration's
+// product name to create the forwarding rule type (e.g., "custom_jamf").
+message ForwardingRuleData {
+  string rule_id = 1;                     // Unique rule identifier within this integration (required)
+  NetworkEntity source = 2;               // Source network entity (required)
+  NetworkEntity destination = 3;          // Destination network entity (required)
+  bool is_bidirectional = 4;              // Whether the rule applies in both directions
+  map<string, string> properties = 5;     // Optional custom properties for the rule
 }
