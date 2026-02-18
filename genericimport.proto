@@ -168,6 +168,7 @@ message Vulnerability {
   string scanner_name = 15; // Name/title from the scanner
   // Additional metadata
   string severity = 16; // Severity level (e.g., "critical", "high", "medium", "low")
+  map<string, string> dynamic_properties = 17; // Scanner-specific key-value metadata (e.g., detection score, result text)
 }
 
 // Control type enum - matches db interfaces ControlType
