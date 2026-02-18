@@ -20,6 +20,7 @@ enum IdentifierType {
   CROWDSTRIKE_AID = 9;
   REPO_NAME = 10;
   ILLUMIO_AGENT_UUID = 11;
+  QUALYS_AGENT_ID = 12;
 }
 
 enum InstancePropertyType {
