@@ -252,3 +252,12 @@ message ForwardingRuleData {
   bool is_bidirectional = 4;              // Whether the rule applies in both directions
   map<string, string> properties = 5;     // Optional custom properties for the rule
 }
+
+// TestAndSaveResponse holds the result of a starlark test_and_save call.
+message TestAndSaveResponse {
+  bool ok = 1;
+  string error = 2;
+  int32 status_code = 3;
+  string url = 4;
+  string response_body = 5;
+}
