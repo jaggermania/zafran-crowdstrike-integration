@@ -258,6 +258,20 @@ message ForwardingRuleData {
   string raw_response = 6; // Raw HTTP response body returned by the API before parsing
 }
 
+// Control-to-target association. Targets are subnets (firewalls/IDS) and/or
+// forwarding rules (WAFs/LBs, where a policy is bound to a domain or similar
+// entity that we normalize into a forwarding rule). control_product is derived
+// from the integration type at normalize time (matching ControlData). Records
+// with the same control_id are aggregated by the normalizer; subnet_cidrs must
+// be flat IPv4 CIDRs and forwarding_rule_ids must match the rule_id of a
+// ForwardingRuleData emitted via collect_forwarding_rule.
+message ControlAssociationData {
+  string control_id = 1;                   // Must match the control_id emitted via collect_control.
+  ControlType control_type = 2;            // Must match the type used in collect_control for this control_id.
+  repeated string subnet_cidrs = 3;        // Flat IPv4 CIDRs only; 0.0.0.0/0 and non-IPv4 are dropped.
+  repeated string forwarding_rule_ids = 4; // rule_id values from forwarding rules this control protects (WAF/LB).
+}
+
 // HttpErrorDetails holds structured HTTP error info that scripts can report.
 message HttpErrorDetails {
   string error = 1;
