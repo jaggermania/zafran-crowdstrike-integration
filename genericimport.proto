@@ -157,6 +157,15 @@ message CVSS {
   string type = 5; // Type of CVSS (e.g., "primary", "secondary")
 }
 
+// VulnerabilitySource links a finding back to its identity in the originating scanner.
+// Populating this enables filtering by original_source_id in the UI and powers
+// remediation/work-item linking workflows (same pipeline as native integrations).
+message VulnerabilitySource {
+  string source = 1;       // ProductId string (e.g. "defectdojo", "ermetic"). Falls back to integration product ID when empty.
+  string source_key = 2;   // Identifier type (e.g. "defectdojo_finding_id", "ermetic_policy_name")
+  string source_value = 3; // Actual ID value from the scanner
+}
+
 message Vulnerability {
   string instance_id = 1;
   string cve = 2;
@@ -178,6 +187,7 @@ message Vulnerability {
   string severity = 16; // Severity level (e.g., "critical", "high", "medium", "low")
   map<string, string> dynamic_properties = 17; // Scanner-specific key-value metadata (e.g., detection score, result text)
   string raw_response = 18; // Raw HTTP response body returned by the API before parsing
+  repeated VulnerabilitySource vulnerability_sources = 19; // Scanner-specific finding identities for original_source_id filtering and remediation linking
 }
 
 // Control type enum - matches db interfaces ControlType
