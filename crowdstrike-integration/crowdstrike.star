@@ -141,8 +141,7 @@ def fetch_all_assets(api_url, bearer_token, page_size = 10):
             paginated_url = "%s?limit=%d" % (url, page_size)
 
         response = fetch_page(paginated_url, headers)
-
-        data = json.decode(response.get("body"))
+        data = json.decode(response.get("body", "{}"))
 
         offset = data.get("meta", {}).get("pagination", {}).get("next")
         all_items.extend(data["resources"])
@@ -233,10 +232,9 @@ def fetch_all_vulnerabilities(api_url, bearer_token, page_size = 1000):
             paginated_url = "%s?filter=%s&limit=%d" % (url, "status:'open'", page_size)
 
         response = fetch_page(paginated_url, headers)
+        data = json.decode(response.get("body", "{}"))
 
-        data = json.decode(response.get("body"))
         after = data.get("meta", {}).get("pagination", {}).get("after")
-
         all_items.extend(data["resources"])
 
         if not after:
