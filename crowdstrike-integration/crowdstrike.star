@@ -21,8 +21,13 @@ FATAL_STATUS_CODES = {
     404: "Not Found",
 }
 
-
 def main(**kwargs):
+    """
+    Main.
+
+    Args:
+        kwargs: Dynamic keyword arguments.
+    """
 
     log.info("Get parameters ...")
     api_url = kwargs.get("api_url", "https://api.us-2.crowdstrike.com/").rstrip("/")
@@ -35,7 +40,7 @@ def main(**kwargs):
     pb = zafran.proto_file
 
     log.info("Get bearer token ...")
-    bearer_token = get_bearer_token(api_url,client_id, client_secret_secret)
+    bearer_token = get_bearer_token(api_url, client_id, client_secret_secret)
     if not bearer_token:
         log.error("Failed to get bearer token.")
         return None
@@ -45,7 +50,7 @@ def main(**kwargs):
     log.info("Found %d assets" % len(all_assets))
 
     log.info("Fetching vunerabilities ...")
-    all_vunerabilities = pull_all_vulnerabilities(api_url, bearer_token, page_size)
+    all_vunerabilities = fetch_all_vulnerabilities(api_url, bearer_token, page_size)
     log.info("Found %d vunerabilities" % len(all_vunerabilities))
 
     log.info("Parsing and collecting assets ...")
@@ -62,39 +67,60 @@ def main(**kwargs):
             zafran.collect_vulnerability(vulnerability)
             log.info("Collected vulnerability:", vulnerability.cve)
 
-
 def get_bearer_token(api_url, client_id, client_secret):
+    """
+    Get bearer token.
+
+    Args:
+        api_url: Base API URL
+        client_id: Client ID.
+        client_secret: Client secret.
+
+    Returns:
+        str | None: Access token if successful, otherwise None.
+    """
     log.info("Requesting OAuth token...")
-    token_url = api_url + "/oauth2/token"
 
     response = http.post(
-        token_url,
+        api_url + "/oauth2/token",
         headers={
             "Content-Type": "application/x-www-form-urlencoded",
-            "Accept": "application/json"
+            "Accept": "application/json",
         },
-        body="client_id=" + client_id + "&client_secret=" + client_secret
+        body="client_id=%s&client_secret=%s" % (client_id, client_secret),
     )
 
-    if response["status_code"] != 201:
+    status = response.get("status_code")
 
+    if status != 201:
         log.error("Failed to get token.")
-        log.error("Status code:", response["status_code"])
-        log.error("Response:", response["body"][:500])
+        log.error("Status code: %s", status)
+        log.error("Response: %s", response.get("body", "")[:500])
         return None
 
-    data = json.decode(response["body"])
-    token = data.get("access_token", "")
+    data = json.decode(response.get("body", ""))
+    token = data.get("access_token")
 
     if not token:
         log.error("No access_token in response")
-        return ""
+        return None
 
     log.info("Successfully obtained token")
+
     return token
 
+def fetch_all_assets(api_url, bearer_token, page_size = 10):
+    """
+    Fetch all assets using paginated API requests.
 
-def fetch_all_assets(api_url, bearer_token, page_size=10):
+    Args:
+        api_url: Base API URL.
+        bearer_token: OAuth bearer token.
+        page_size: Number of assets per request.
+
+    Returns:
+        list: List of all asset resources.
+    """
 
     url = api_url + "/devices/combined/devices/v1"
 
@@ -121,26 +147,24 @@ def fetch_all_assets(api_url, bearer_token, page_size=10):
         offset = data.get("meta", {}).get("pagination", {}).get("next")
         all_items.extend(data["resources"])
 
-        # Tmp for testing
-        # return all_items[:10]
-
         if not offset:
             break
 
     return all_items
-
 
 def parse_to_instance(raw_instance, pb):
     """
     Parse raw asset data into an InstanceData proto message.
 
     Args:
-        raw_instance: Raw instance dict from the API
-        pb: Proto types from zafran.proto_file
+        raw_instance: Raw instance dictionary from the API.
+        pb: Proto types from zafran.proto_file.
 
     Returns:
-        InstanceData proto message
+        InstanceData | None: Parsed instance proto message,
+        or None if the instance is invalid.
     """
+
     instance_id = raw_instance.get("device_id", "")
     if not instance_id:
         log.warn("Instance missing ID, skipping")
@@ -153,32 +177,42 @@ def parse_to_instance(raw_instance, pb):
     # Build identifiers list
     identifiers = [
         pb.InstanceIdentifier(
-            key=pb.IdentifierType.LINUX_UUID,
-            value=instance_id
+            key = pb.IdentifierType.LINUX_UUID,
+            value = instance_id
         )
     ]
-    ips=[]
-    macs=[]
+    ips = []
+    macs = []
     key_value_tags = []
     labels = []
 
     instance = pb.InstanceData(
-        instance_id=instance_id,
-        name=name,
-        operating_system=os,
-        asset_information=pb.AssetInstanceInformation(
-            ip_addresses=ips,
-            mac_addresses=macs
+        instance_id = instance_id,
+        name = name,
+        operating_system = os,
+        asset_information = pb.AssetInstanceInformation(
+            ip_addresses = ips,
+            mac_addresses = macs
         ),
-        identifiers=identifiers,
-        labels=labels,
-        key_value_tags=key_value_tags
+        identifiers = identifiers,
+        labels = labels,
+        key_value_tags = key_value_tags
     )
 
     return instance
 
+def fetch_all_vulnerabilities(api_url, bearer_token, page_size = 1000):
+    """
+    Fetch all open vulnerabilities using paginated API requests.
 
-def pull_all_vulnerabilities(api_url, bearer_token, page_size=1000):
+    Args:
+        api_url: Base API URL.
+        bearer_token: OAuth bearer token.
+        page_size: Number of vulnerabilities per request.
+
+    Returns:
+        list:
+    """
 
     url = api_url + "/spotlight/combined/vulnerabilities/v1"
 
@@ -205,34 +239,31 @@ def pull_all_vulnerabilities(api_url, bearer_token, page_size=1000):
 
         all_items.extend(data["resources"])
 
-        #Tmp for testing
-        # return all_items[:10]
-
         if not after:
             break
 
     return all_items
-
 
 def parse_to_vulnerability(raw_vuln, pb):
     """
     Parse raw vulnerability data into a Vulnerability proto message.
 
     Args:
-        raw_vuln: Raw vulnerability dict from the API
-        pb: Proto types from zafran.proto_file
+        raw_vuln: Raw vulnerability dictionary from the API.
+        pb: Proto types from zafran.proto_file.
 
     Returns:
-        Vulnerability proto message
+        Vulnerability | None: Parsed vulnerability proto message,
+        or None if the vulnerability is invalid.
     """
+
     cve = raw_vuln.get("cve", {}).get("id")
     if not cve:
         log.warn("Vulnerability missing CVE, skipping")
         return None
 
-
     # Extract fields from raw data
-    instance_id = raw_vuln.get("id", "") #aid
+    instance_id = raw_vuln.get("id", "")
     description = raw_vuln.get("vulnerability_id", "")
 
     # OVO RESITI
@@ -247,64 +278,88 @@ def parse_to_vulnerability(raw_vuln, pb):
     cvss_list = []
     if score and vector:
         cvss_list.append(pb.CVSS(
-            base_score=float(score),
-            vector=vector,
-            version="3.1"
+            base_score = float(score),
+            vector = vector,
+            version = "3.1"
         ))
 
     # Create and return the Vulnerability proto
     vulnerability = pb.Vulnerability(
-        instance_id=instance_id,
-        cve=cve,
-        description=description,
-        in_runtime=True,
-        component=pb.Component(
-            product=product,
-            vendor=vendor,
-            version=version,
-            type=pb.ComponentType.LIBRARY
+        instance_id = instance_id,
+        cve = cve,
+        description = description,
+        in_runtime = True,
+        component = pb.Component(
+            product = product,
+            vendor = vendor,
+            version = version,
+            type = pb.ComponentType.LIBRARY
         ),
-        CVSS=cvss_list,
-        remediation=pb.Remediation(
-            suggestion=fix,
-            source="Example Scanner"
+        CVSS = cvss_list,
+        remediation = pb.Remediation(
+            suggestion = fix,
+            source = "Example Scanner"
         )
     )
 
     return vulnerability
 
-
 def min_value(a, b):
-    if a < b:
-        return a
-    return b
+    """
+    Return the smaller of two numbers.
 
+    Args:
+        a: First number.
+        b: Second.
+
+    Returns:
+        The minimum of a and b.
+    """
+
+    return a if a < b else b
 
 def get_retry_delay(response, current_delay):
+    """
+    Get retry delay.
+
+    Args:
+        response: Http response.
+        current_delay: Delay that will be retruned if no retry header.
+
+    Returns:
+        int: Retry delay in seconds.
+    """
     headers = response.get("headers", {})
 
-    # Honor Retry-After header if present
+    # Use Retry-After header if present
     if "Retry-After" in headers:
-        retry_after = headers["Retry-After"]
-
-        # Convert string header to integer
-        return int(retry_after)
+        return int(headers["Retry-After"])
 
     return current_delay
 
-
 def fetch_page(url, headers):
+    """
+    Fetch page.
+
+    Args:
+        url: Page url.
+        headers: Http header of request.
+
+    Returns:
+        dict: HTTP response object.
+
+    Raises:
+        RuntimeError: If the request fails permanently or maximum retries are exceeded.
+    """
     retries = 0
     backoff = INITIAL_BACKOFF
 
     while True:
         log.info("Fetching: %s" % url)
 
-        response = http.get(url, headers=headers)
+        response = http.get(url, headers = headers)
 
         status = response.get("status_code")
-        # Tmp for testing
-        #status = 454
 
         # Success
         if status == 200:
@@ -322,7 +377,7 @@ def fetch_page(url, headers):
             log.info("Retry %d/%d after %d seconds (status %d)" % (retries, MAX_RETRIES, delay, status))
             time.sleep(delay)
 
-            # exponential backoff
+            # Exponential backoff
             backoff = min_value(backoff * 2, MAX_BACKOFF)
             continue
 
@@ -332,4 +387,3 @@ def fetch_page(url, headers):
 
         # Unknown status
         fail("Unexpected status code: %d\nResponse: %s" % (status, response.get("body", "")[:500]))
-
