@@ -1,53 +1,44 @@
-# Example Integration Script
+# CrowdStrike Integration Script
 
-This directory contains a template Starlark script that demonstrates how to build a custom integration.
+This directory contains a Starlark script designed to integrate CrowdStrike with the Zafran platform.
 
 ## Overview
 
-The `example.star` script shows how to:
-- Connect to an external API
-- Fetch instances (assets) and vulnerabilities
-- Transform API responses into the required proto format
-- Collect data using the Zafran module
+The `crowdstrike.star` script automates the retrieval of asset devices and open vulnerabilities from CrowdStrike APIs, processes them, and ingests them into Zafran.
 
-## How to Use This Template
+Specifically, the script shows how to:
+- Authenticate against CrowdStrike's OAuth2 endpoint using a client ID and client secret.
+- Fetch device assets using CrowdStrike's paginated endpoint (`/devices/combined/devices/v1`).
+- Fetch open vulnerabilities using CrowdStrike's Spotlight API (`/spotlight/combined/vulnerabilities/v1`).
+- Transform CrowdStrike's API responses into Zafran proto formats (`InstanceData` and `Vulnerability`).
+- Handle network resilience with an exponential backoff mechanism for retryable status codes.
 
-1. **Copy the file** - Copy `example.star` and rename it for your integration (e.g., `my_scanner.star`)
+## How to Use This Script
 
-2. **Update API endpoints** - Modify the `fetch_instances()` and `fetch_vulnerabilities()` functions to call your API
+1. **Verify API Access** - Ensure you have valid CrowdStrike Falcon API credentials (`client_id` and `client_secret`) with read scopes for both **Devices** and **Spotlight vulnerabilities**.
 
-3. **Map your data** - Update `parse_to_instance()` and `parse_to_finding()` to transform your API response into the proto format
-
-4. **Adjust configuration** - Update the configuration constants at the top of the script:
-   - `USE_OAUTH` - Set to `True` if your API requires OAuth token exchange
-   - `PAGE_SIZE` - Adjust based on your API's pagination limits
-
-> **Important:** The configuration constants (`USE_OAUTH`, `PAGE_SIZE`, etc.) are for development and testing purposes. In production, only three parameters can be passed to your script: `api_url`, `api_key`, and `api_secret`. Any other configuration must be hardcoded as constants in your script before deployment.
+2. **Adjust Pagination Limits** - The script includes defensive caps for page limits to optimize API execution (capped at `10000` for assets and `5000` for vulnerabilities). You can adjust default values by passing a `page_size` parameter during manual testing.
 
 ## Script Structure
 
-| Function | Purpose |
-|----------|---------|
-| `main` | Entry point that orchestrates the integration |
-| `get_bearer_token` | (Optional) Gets a bearer token from OAuth endpoint |
-| `fetch_paginated` | Helper to fetch data with pagination support |
-| `fetch_instances` | Fetches raw instance/asset data from the API |
-| `fetch_vulnerabilities` | Fetches raw vulnerability data from the API |
-| `parse_to_instance` | Transforms raw asset data into `InstanceData` proto |
-| `parse_to_finding` | Transforms raw vulnerability data into `Vulnerability` proto |
+| Function | Purpose                                                                                                                                          |
+|----------|--------------------------------------------------------------------------------------------------------------------------------------------------|
+| `main` | Entry point that orchestrates parameters, executes authentication, pulls assets/vulnerabilities, and invokes the parsing pipelines.              |
+| `get_bearer_token` | Handles OAuth2 token exchange with the `/oauth2/token` CrowdStrike API endpoint.                                                                 |
+| `fetch_all_assets` | Iterates and fetches all assets using an offset-based pagination loop.                                                                           |
+| `parse_to_instance` | Converts raw asset items into Zafran `InstanceData` proto messages, extracting hostnames, operating systems, and UUID identifiers.               |
+| `fetch_all_vulnerabilities` | Pulls all open vulnerability entries from CrowdStrike Spotlight using the cursor-based `after` token parameter.                                  |
+| `parse_to_vulnerability` | Maps Falcon Spotlight vulnerabilities to Zafran `Vulnerability` proto schemas including CVSS v3.1 arrays, product scopes, and remediation rules. |
+| `fetch_page` | Core HTTP wrapper that safely fires requests, captures status errors, and implements an exponential retry backoff mechanism.                     |
+| `get_retry_delay` | Determines delay timings using HTTP `Retry-After` headers if provided by the CrowdStrike Gateway API.                                            |
 
-## Running the Example
+## Running the Script
+
+You can test the script locally using the Starlark runner binary:
 
 ```bash
-# Linux
-./starlark-runner -script example/example.star -params "api_url=https://api.example.com,api_key=your_key"
+# Linux execution example
+./starlark-runner -script crowdstrike.star -params "api_url=[https://api.crowdstrike.com](https://api.crowdstrike.com),client_id=your_client_id,client_secret=your_client_secret"
 
-# macOS
-./starlark-runner-mac -script example/example.star -params "api_url=https://api.example.com,api_key=your_key"
-```
-
-## Notes
-
-- The example uses mock data for demonstration. In a real integration, uncomment the HTTP calls and remove the mock data.
-- See the main [README](../README.md) for full documentation on available modules and proto types.
-
+# macOS execution example
+./starlark-runner-mac -script crowdstrike.star -params "api_url=[https://api.crowdstrike.com](https://api.crowdstrike.com),client_id=your_client_id,client_secret=your_client_secret"
