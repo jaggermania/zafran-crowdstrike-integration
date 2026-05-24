@@ -2,6 +2,25 @@ load("zafran", "zafran")
 load("http", "http")
 load("json", "json")
 load("log", "log")
+load("time", "time")
+
+MAX_RETRIES = 5
+INITIAL_BACKOFF = 1
+MAX_BACKOFF = 60
+RETRYABLE_STATUS_CODES = [
+    429,
+    500,
+    502,
+    503,
+    504,
+]
+FATAL_STATUS_CODES = {
+    400: "Bad Request",
+    401: "Unauthorized",
+    403: "Forbidden",
+    404: "Not Found",
+}
+
 
 def main(**kwargs):
 
@@ -44,11 +63,8 @@ def main(**kwargs):
             log.info("Collected vulnerability:", vulnerability.cve)
 
 
-
 def get_bearer_token(api_url, client_id, client_secret):
     log.info("Requesting OAuth token...")
-
-    # Build token endpoint URL
     token_url = api_url + "/oauth2/token"
 
     response = http.post(
@@ -77,6 +93,7 @@ def get_bearer_token(api_url, client_id, client_secret):
     log.info("Successfully obtained token")
     return token
 
+
 def fetch_all_assets(api_url, bearer_token, page_size=10):
 
     url = api_url + "/devices/combined/devices/v1"
@@ -97,26 +114,21 @@ def fetch_all_assets(api_url, bearer_token, page_size=10):
         else:
             paginated_url = "%s?limit=%d" % (url, page_size)
 
-        # Make API request
-        response = http.get(paginated_url, headers=headers)
-
-        if response.get("status_code") != 200:
-            log.error("Failed to fetch page:", response.get("status_code"))
-            log.error("Response:", response.get("body", "")[:500])
-            break
+        response = fetch_page(paginated_url, headers)
 
         data = json.decode(response.get("body"))
 
         offset = data.get("meta", {}).get("pagination", {}).get("next")
         all_items.extend(data["resources"])
 
-        # tmp
-        return all_items[:10]
+        # Tmp for testing
+        # return all_items[:10]
 
         if not offset:
             break
 
     return all_items
+
 
 def parse_to_instance(raw_instance, pb):
     """
@@ -186,25 +198,21 @@ def pull_all_vulnerabilities(api_url, bearer_token, page_size=1000):
         else:
             paginated_url = "%s?filter=%s&limit=%d" % (url, "status:'open'", page_size)
 
-        response = http.get(paginated_url, headers=headers)
-
-        if response.get("status_code") != 200:
-            log.error("Failed to fetch page:", response.get("status_code"))
-            log.error("Response:", response.get("body", "")[:500])
-            break
+        response = fetch_page(paginated_url, headers)
 
         data = json.decode(response.get("body"))
         after = data.get("meta", {}).get("pagination", {}).get("after")
 
         all_items.extend(data["resources"])
 
-        #tmp
-        return all_items[:10]
+        #Tmp for testing
+        # return all_items[:10]
 
         if not after:
             break
 
     return all_items
+
 
 def parse_to_vulnerability(raw_vuln, pb):
     """
@@ -264,3 +272,64 @@ def parse_to_vulnerability(raw_vuln, pb):
     )
 
     return vulnerability
+
+
+def min_value(a, b):
+    if a < b:
+        return a
+    return b
+
+
+def get_retry_delay(response, current_delay):
+    headers = response.get("headers", {})
+
+    # Honor Retry-After header if present
+    if "Retry-After" in headers:
+        retry_after = headers["Retry-After"]
+
+        # Convert string header to integer
+        return int(retry_after)
+
+    return current_delay
+
+
+def fetch_page(url, headers):
+    retries = 0
+    backoff = INITIAL_BACKOFF
+
+    while True:
+        log.info("Fetching: %s" % url)
+
+        response = http.get(url, headers=headers)
+
+        status = response.get("status_code")
+        # Tmp for testing
+        #status = 454
+
+        # Success
+        if status == 200:
+            return response
+
+        # Retryable errors
+        if status in RETRYABLE_STATUS_CODES:
+            retries += 1
+
+            if retries > MAX_RETRIES:
+                fail("Max retries exceeded for %s (status %d)" % (url, status))
+
+            delay = get_retry_delay(response, backoff)
+
+            log.info("Retry %d/%d after %d seconds (status %d)" % (retries, MAX_RETRIES, delay, status))
+            time.sleep(delay)
+
+            # exponential backoff
+            backoff = min_value(backoff * 2, MAX_BACKOFF)
+            continue
+
+        # Fatal client errorFATAL CLIENT ERRORS
+        if status in FATAL_STATUS_CODES:
+            fail("%s (%d)\nResponse: %s" % (FATAL_STATUS_CODES[status], status, response.get("body", "")[:500]))
+
+        # Unknown status
+        fail("Unexpected status code: %d\nResponse: %s" % (status, response.get("body", "")[:500]))
+
