@@ -38,7 +38,4 @@ You can test the script locally using the Starlark runner binary:
 
 ```bash
 # Linux execution example
-./starlark-runner -script crowdstrike.star -params "api_url=[https://api.crowdstrike.com](https://api.crowdstrike.com),client_id=your_client_id,client_secret=your_client_secret"
-
-# macOS execution example
-./starlark-runner-mac -script crowdstrike.star -params "api_url=[https://api.crowdstrike.com](https://api.crowdstrike.com),client_id=your_client_id,client_secret=your_client_secret"
+./starlark-runner -script crowdstrike.star -params "api_url=https://api.us-2.crowdstrike.com,client_id=your_client_id,client_secret=your_client_secret"
