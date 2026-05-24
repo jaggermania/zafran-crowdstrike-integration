@@ -30,9 +30,9 @@ def main(**kwargs):
     """
 
     log.info("Get parameters ...")
-    api_url = kwargs.get("api_url", "https://api.us-2.crowdstrike.com/").rstrip("/")
-    client_id = kwargs.get("client_id", "1f23eafd83114c8f85bd53ce0e1323cd")
-    client_secret_secret = kwargs.get("client_secret_secret", "QHtdI9mOi1hb7l5jkEvy3xGVXNsTR4Sf806z2peM")
+    api_url = kwargs.get("api_url", "").rstrip("/")
+    client_id = kwargs.get("client_id", "")
+    client_secret = kwargs.get("client_secret", "")
     page_size = int(kwargs.get("page_size", "100"))
 
     log.info("Starting integration with API:", api_url)
@@ -40,7 +40,7 @@ def main(**kwargs):
     pb = zafran.proto_file
 
     log.info("Get bearer token ...")
-    bearer_token = get_bearer_token(api_url, client_id, client_secret_secret)
+    bearer_token = get_bearer_token(api_url, client_id, client_secret)
     if not bearer_token:
         log.error("Failed to get bearer token.")
         return None
@@ -266,9 +266,10 @@ def parse_to_vulnerability(raw_vuln, pb):
     instance_id = raw_vuln.get("id", "")
     description = raw_vuln.get("vulnerability_id", "")
 
-    # OVO RESITI
-    product = raw_vuln.get("apps", [])[0]["product_name_normalized"]
-    vendor = raw_vuln.get("apps", [])[0]["vendor_normalized"]
+    apps = raw_vuln.get("apps") or []
+    first_app = apps[0] if apps else {}
+    product = first_app.get("product_name_normalized", "")
+    vendor = first_app.get("vendor_normalized", "")
     version = raw_vuln.get("version", "")
     score = raw_vuln.get("score")
     vector = raw_vuln.get("vector", "")
