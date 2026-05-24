@@ -210,7 +210,7 @@ def fetch_all_vulnerabilities(api_url, bearer_token, page_size = 1000):
         page_size: Number of vulnerabilities per request.
 
     Returns:
-        list:
+        list: List of all vulnerability resources.
     """
 
     url = api_url + "/spotlight/combined/vulnerabilities/v1"
@@ -303,20 +303,6 @@ def parse_to_vulnerability(raw_vuln, pb):
 
     return vulnerability
 
-def min_value(a, b):
-    """
-    Return the smaller of two numbers.
-
-    Args:
-        a: First number.
-        b: Second.
-
-    Returns:
-        The minimum of a and b.
-    """
-
-    return a if a < b else b
-
 def get_retry_delay(response, current_delay):
     """
     Get retry delay.
@@ -377,7 +363,7 @@ def fetch_page(url, headers):
             time.sleep(delay)
 
             # Exponential backoff
-            backoff = min_value(backoff * 2, MAX_BACKOFF)
+            backoff = min(backoff * 2, MAX_BACKOFF)
             continue
 
         # Fatal client errorFATAL CLIENT ERRORS
